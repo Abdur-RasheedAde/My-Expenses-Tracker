@@ -10,31 +10,33 @@ st.title("💸 Simple Expense Tracker")
 
 st.subheader("Add Expenses (Bulk Entry)")
 
-# -----------------------------
-# 1. Expense Entry Table
-# -----------------------------
+# ------------------------------------
+# Categories
+# ------------------------------------
 categories = [
     "Food", "Transport", "Appliance", "Wear", "Gadget",
     "Donation", "Investment", "Gift", "Repairs", "Other"
 ]
 
+# ------------------------------------
+# Initialize table in session
+# ------------------------------------
 if "expense_table" not in st.session_state:
     st.session_state.expense_table = pd.DataFrame({
-        "S/N": [1],
         "Item": [""],
         "Amount": [0.0],
         "Category": ["Food"],
-        "Date": [date.today()]
+        "Date": [None]
     })
 
+# ------------------------------------
+# Editable table (no S/N column yet)
+# ------------------------------------
 edited_df = st.data_editor(
     st.session_state.expense_table,
     num_rows="dynamic",
     use_container_width=True,
     column_config={
-        "S/N": st.column_config.NumberColumn(
-            "S/N", disabled=True
-        ),
         "Item": st.column_config.TextColumn(
             "Item", required=True
         ),
@@ -42,82 +44,94 @@ edited_df = st.data_editor(
             "Amount (₦)", min_value=0.0, step=100.0, required=True
         ),
         "Category": st.column_config.SelectboxColumn(
-            "Category",
-            options=categories,
-            required=True
+            "Category", options=categories, required=True
         ),
         "Date": st.column_config.DateColumn(
-            "Date", required=True
+            "Date (optional)", required=False
         )
     }
 )
 
-# Re-number S/N automatically
-edited_df["S/N"] = range(1, len(edited_df) + 1)
-st.session_state.expense_table = edited_df
+# ------------------------------------
+# Auto S/N (computed, not editable)
+# ------------------------------------
+edited_df.insert(0, "S/N", range(1, len(edited_df) + 1))
 
-# -----------------------------
-# 2. Custom Category Input
-# -----------------------------
+st.session_state.expense_table = edited_df.drop(columns=["S/N"])
+
+# ------------------------------------
+# LIVE TOTAL (no save button needed)
+# ------------------------------------
+live_total = edited_df["Amount"].fillna(0).sum()
+
+st.markdown("### 💰 Live Total")
+st.metric("Current Total", f"₦{live_total:,.2f}")
+
+# ------------------------------------
+# Custom category
+# ------------------------------------
 custom_category = st.text_input(
-    "Add custom category (optional)",
-    help="Use this if category is not in the list"
+    "Add custom category (if Category = Other)",
+    placeholder="e.g. School fees, Medical, Charity"
 )
 
-# -----------------------------
-# 3. Save All Expenses
-# -----------------------------
+# ------------------------------------
+# Save to database
+# ------------------------------------
 if st.button("💾 Save All Expenses"):
-    saved_rows = 0
+    saved = 0
 
     for _, row in edited_df.iterrows():
-        category = (
+        if not row["Item"] or row["Amount"] <= 0:
+            continue
+
+        expense_date = (
+            str(row["Date"]) if pd.notna(row["Date"]) else str(date.today())
+        )
+
+        final_category = (
             custom_category
             if row["Category"] == "Other" and custom_category
             else row["Category"]
         )
 
-        if row["Item"] and row["Amount"] > 0:
-            db.add_expense(
-                amount=row["Amount"],
-                category=category,
-                date=str(row["Date"]),
-                note=row["Item"]
-            )
-            saved_rows += 1
+        db.add_expense(
+            amount=row["Amount"],
+            category=final_category,
+            date=expense_date,
+            note=row["Item"]
+        )
+        saved += 1
 
-    st.success(f"✅ {saved_rows} expenses saved successfully!")
+    st.success(f"✅ {saved} expenses saved successfully!")
 
-    # Clear table after save
+    # reset table
     st.session_state.expense_table = pd.DataFrame({
-        "S/N": [1],
         "Item": [""],
         "Amount": [0.0],
         "Category": ["Food"],
-        "Date": [date.today()]
+        "Date": [None]
     })
 
-# -----------------------------
-# 4. Summary Section
-# -----------------------------
+# ------------------------------------
+# DATABASE SUMMARY
+# ------------------------------------
 st.divider()
-st.subheader("Summary")
+st.subheader("Saved Expenses Summary")
 
-total = db.total_expense()
-st.metric("Total Spending", f"₦{total:,.2f}")
+total_db = db.total_expense()
+st.metric("Total Saved Spending", f"₦{total_db:,.2f}")
 
-# -----------------------------
-# 5. Expense History
-# -----------------------------
-st.divider()
+# ------------------------------------
+# Expense History
+# ------------------------------------
 st.subheader("Expense History")
 
 expenses = db.fetch_expenses()
 if expenses:
     history_df = pd.DataFrame(
-        expenses,
-        columns=["Date", "Category", "Amount", "Item"]
+        expenses, columns=["Date", "Category", "Amount", "Item"]
     )
     st.dataframe(history_df, use_container_width=True)
 else:
-    st.info("No expenses yet.")
+    st.info("No expenses saved yet.")
