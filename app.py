@@ -23,7 +23,6 @@ categories = [
     "Donation", "Investment", "Gift", "Repairs", "Other"
 ]
 
-# Initialize editable table
 if "expense_table" not in st.session_state:
     st.session_state.expense_table = pd.DataFrame({
         "Item": [""],
@@ -53,17 +52,16 @@ edited_df = st.data_editor(
 st.session_state.expense_table = edited_df
 
 # ==========================
-# LIVE TOTAL (NOT SAVED)
+# LIVE TOTAL
 # ==========================
 live_total = edited_df["Amount"].fillna(0).sum()
 st.metric("💰 Current Total (Not Yet Saved)", f"₦{live_total:,.2f}")
 
 # ==========================
-# SAVE TO DATABASE
+# SAVE
 # ==========================
 if st.button("💾 Save All Expenses"):
     saved = 0
-
     for _, row in edited_df.iterrows():
         if not row["Item"] or row["Amount"] <= 0:
             continue
@@ -84,9 +82,7 @@ if st.button("💾 Save All Expenses"):
         )
         saved += 1
 
-    st.success(f"✅ {saved} expenses saved successfully!")
-
-    # Reset table
+    st.success(f"✅ {saved} expenses saved!")
     st.session_state.expense_table = pd.DataFrame({
         "Item": [""],
         "Amount": [0.0],
@@ -106,33 +102,36 @@ df = db.fetch_expenses_df()
 if not df.empty:
     df["date"] = pd.to_datetime(df["date"])
 
-    # WEEK FORMATTING → Wk-01, Wk-02...
+    # Week labels → Wk-01
     df["week_no"] = df["date"].dt.isocalendar().week
     df["week_label"] = df["week_no"].apply(lambda x: f"Wk-{x:02d}")
 
-    # MONTH FORMATTING → Jan, Feb...
+    # Month labels → Jan
     df["month_no"] = df["date"].dt.month
     df["month_label"] = df["date"].dt.strftime("%b")
 
     # ==========================
-    # CATEGORY PIE (MODERATE SIZE ✅)
+    # PIE CHART (ACTUALLY SMALL ✅)
     # ==========================
     st.subheader("Spending by Category")
+
     cat_df = df.groupby("category")["amount"].sum()
 
-    fig, ax = plt.subplots(figsize=(5, 5))  # ✅ moderate size
+    fig, ax = plt.subplots(figsize=(3.2, 3.2), dpi=90)
     ax.pie(
         cat_df.values,
         labels=cat_df.index,
-        autopct="%1.1f%%",
+        autopct="%1.0f%%",
         startangle=90,
-        textprops={"fontsize": 10}
+        textprops={"fontsize": 9}
     )
     ax.axis("equal")
-    st.pyplot(fig)
+
+    st.pyplot(fig, use_container_width=False)
+    plt.close(fig)
 
     # ==========================
-    # WEEKLY TREND
+    # WEEKLY
     # ==========================
     st.subheader("Weekly Spending Trend")
     week_df = (
@@ -143,7 +142,7 @@ if not df.empty:
     st.line_chart(week_df, x="week_label", y="amount")
 
     # ==========================
-    # MONTHLY TREND
+    # MONTHLY
     # ==========================
     st.subheader("Monthly Spending")
     month_df = (
@@ -157,7 +156,7 @@ else:
     st.info("No saved data yet for analytics.")
 
 # ==========================
-# EXPORT TO EXCEL
+# EXPORT
 # ==========================
 st.divider()
 st.header("📤 Export Data")
