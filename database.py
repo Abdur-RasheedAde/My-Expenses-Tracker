@@ -1,3 +1,4 @@
+import pandas as pd
 import sqlite3
 
 def get_connection():
@@ -43,3 +44,8 @@ def total_expense():
     total = cur.fetchone()[0]
     conn.close()
     return total or 0
+
+def fetch_expenses_df():
+    conn = get_connection()
+    df = pd.read_sql(
+       
