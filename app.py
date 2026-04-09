@@ -58,38 +58,53 @@ live_total = edited_df["Amount"].fillna(0).sum()
 st.metric("💰 Current Total (Not Yet Saved)", f"₦{live_total:,.2f}")
 
 # ==========================
-# SAVE
+# ACTION BUTTONS
 # ==========================
-if st.button("💾 Save All Expenses"):
-    saved = 0
-    for _, row in edited_df.iterrows():
-        if not row["Item"] or row["Amount"] <= 0:
-            continue
+col1, col2 = st.columns(2)
 
-        expense_date = (
-            str(row["Date"]) if pd.notna(row["Date"]) else str(date.today())
-        )
+with col1:
+    if st.button("💾 Save All Expenses"):
+        saved = 0
+        for _, row in edited_df.iterrows():
+            if not row["Item"] or row["Amount"] <= 0:
+                continue
 
-        note = row["Item"]
-        if row["Category"] == "Other" and row["Comment"]:
-            note = f"{row['Item']} — {row['Comment']}"
+            expense_date = (
+                str(row["Date"]) if pd.notna(row["Date"]) else str(date.today())
+            )
 
-        db.add_expense(
-            amount=row["Amount"],
-            category=row["Category"],
-            date=expense_date,
-            note=note
-        )
-        saved += 1
+            note = row["Item"]
+            if row["Category"] == "Other" and row["Comment"]:
+                note = f"{row['Item']} — {row['Comment']}"
 
-    st.success(f"✅ {saved} expenses saved!")
-    st.session_state.expense_table = pd.DataFrame({
-        "Item": [""],
-        "Amount": [0.0],
-        "Category": ["Food"],
-        "Comment": [""],
-        "Date": [None]
-    })
+            db.add_expense(
+                amount=row["Amount"],
+                category=row["Category"],
+                date=expense_date,
+                note=note
+            )
+            saved += 1
+
+        st.success(f"✅ {saved} expenses saved successfully!")
+
+        st.session_state.expense_table = pd.DataFrame({
+            "Item": [""],
+            "Amount": [0.0],
+            "Category": ["Food"],
+            "Comment": [""],
+            "Date": [None]
+        })
+
+with col2:
+    if st.button("🧹 Clear Current Entries"):
+        st.session_state.expense_table = pd.DataFrame({
+            "Item": [""],
+            "Amount": [0.0],
+            "Category": ["Food"],
+            "Comment": [""],
+            "Date": [None]
+        })
+        st.success("🧹 Current entries cleared. You can start a new round.")
 
 # ==========================
 # ANALYTICS
@@ -102,19 +117,13 @@ df = db.fetch_expenses_df()
 if not df.empty:
     df["date"] = pd.to_datetime(df["date"])
 
-    # Week labels → Wk-01
     df["week_no"] = df["date"].dt.isocalendar().week
     df["week_label"] = df["week_no"].apply(lambda x: f"Wk-{x:02d}")
 
-    # Month labels → Jan
     df["month_no"] = df["date"].dt.month
     df["month_label"] = df["date"].dt.strftime("%b")
 
-    # ==========================
-    # PIE CHART (ACTUALLY SMALL ✅)
-    # ==========================
     st.subheader("Spending by Category")
-
     cat_df = df.groupby("category")["amount"].sum()
 
     fig, ax = plt.subplots(figsize=(3.2, 3.2), dpi=90)
@@ -126,13 +135,9 @@ if not df.empty:
         textprops={"fontsize": 9}
     )
     ax.axis("equal")
-
     st.pyplot(fig, use_container_width=False)
     plt.close(fig)
 
-    # ==========================
-    # WEEKLY
-    # ==========================
     st.subheader("Weekly Spending Trend")
     week_df = (
         df.groupby(["week_no", "week_label"], as_index=False)["amount"]
@@ -141,9 +146,6 @@ if not df.empty:
     )
     st.line_chart(week_df, x="week_label", y="amount")
 
-    # ==========================
-    # MONTHLY
-    # ==========================
     st.subheader("Monthly Spending")
     month_df = (
         df.groupby(["month_no", "month_label"], as_index=False)["amount"]
