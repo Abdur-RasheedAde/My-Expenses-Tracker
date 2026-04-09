@@ -141,3 +141,55 @@ if not df.empty:
         autopct="%1.0f%%",
         startangle=90,
         textprops={"fontsize": 9}
+    )
+    ax.axis("equal")
+    st.pyplot(fig, use_container_width=False)
+    plt.close(fig)
+
+    # ---------- WEEKLY ----------
+    st.subheader("Weekly Spending Trend")
+    week_df = (
+        df.groupby(["week_no", "week_label"], as_index=False)["amount"]
+        .sum()
+        .sort_values("week_no")
+    )
+    st.line_chart(week_df, x="week_label", y="amount")
+
+    # ---------- MONTHLY ----------
+    st.subheader("Monthly Spending")
+    month_df = (
+        df.groupby(["month_no", "month_label"], as_index=False)["amount"]
+        .sum()
+        .sort_values("month_no")
+    )
+    st.bar_chart(month_df, x="month_label", y="amount")
+
+else:
+    st.info("No saved data yet for analytics.")
+
+# ==========================
+# EXPORT TO EXCEL
+# ==========================
+st.divider()
+st.header("📤 Export Data")
+
+if not df.empty:
+    df_export = df.rename(columns={
+        "date": "Date",
+        "category": "Category",
+        "amount": "Amount",
+        "note": "Item / Comment"
+    })
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_export.to_excel(writer, index=False)
+
+    st.download_button(
+        label="📥 Download Excel File",
+        data=buffer.getvalue(),
+        file_name="expenses.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+else:
+    st.info("No data available to export.")
