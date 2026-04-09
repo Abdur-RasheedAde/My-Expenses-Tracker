@@ -23,6 +23,7 @@ categories = [
     "Donation", "Investment", "Gift", "Repairs", "Other"
 ]
 
+# Initialize table in session
 if "expense_table" not in st.session_state:
     st.session_state.expense_table = pd.DataFrame({
         "Item": [""],
@@ -32,10 +33,12 @@ if "expense_table" not in st.session_state:
         "Date": [None]
     })
 
+# Editable table (KEY is critical)
 edited_df = st.data_editor(
     st.session_state.expense_table,
     num_rows="dynamic",
     use_container_width=True,
+    key="expense_editor",
     column_config={
         "Item": st.column_config.TextColumn("Item", required=True),
         "Amount": st.column_config.NumberColumn(
@@ -87,6 +90,7 @@ with col1:
 
         st.success(f"✅ {saved} expenses saved successfully!")
 
+        # Reset table after save
         st.session_state.expense_table = pd.DataFrame({
             "Item": [""],
             "Amount": [0.0],
@@ -94,6 +98,7 @@ with col1:
             "Comment": [""],
             "Date": [None]
         })
+        st.rerun()
 
 with col2:
     if st.button("🧹 Clear Current Entries"):
@@ -104,7 +109,7 @@ with col2:
             "Comment": [""],
             "Date": [None]
         })
-        st.success("🧹 Current entries cleared. You can start a new round.")
+        st.rerun()
 
 # ==========================
 # ANALYTICS
@@ -117,12 +122,15 @@ df = db.fetch_expenses_df()
 if not df.empty:
     df["date"] = pd.to_datetime(df["date"])
 
+    # Weekly labels → Wk-01
     df["week_no"] = df["date"].dt.isocalendar().week
     df["week_label"] = df["week_no"].apply(lambda x: f"Wk-{x:02d}")
 
+    # Monthly labels → Jan
     df["month_no"] = df["date"].dt.month
     df["month_label"] = df["date"].dt.strftime("%b")
 
+    # ---------- PIE CHART (SMALL & FIXED) ----------
     st.subheader("Spending by Category")
     cat_df = df.groupby("category")["amount"].sum()
 
@@ -133,53 +141,3 @@ if not df.empty:
         autopct="%1.0f%%",
         startangle=90,
         textprops={"fontsize": 9}
-    )
-    ax.axis("equal")
-    st.pyplot(fig, use_container_width=False)
-    plt.close(fig)
-
-    st.subheader("Weekly Spending Trend")
-    week_df = (
-        df.groupby(["week_no", "week_label"], as_index=False)["amount"]
-        .sum()
-        .sort_values("week_no")
-    )
-    st.line_chart(week_df, x="week_label", y="amount")
-
-    st.subheader("Monthly Spending")
-    month_df = (
-        df.groupby(["month_no", "month_label"], as_index=False)["amount"]
-        .sum()
-        .sort_values("month_no")
-    )
-    st.bar_chart(month_df, x="month_label", y="amount")
-
-else:
-    st.info("No saved data yet for analytics.")
-
-# ==========================
-# EXPORT
-# ==========================
-st.divider()
-st.header("📤 Export Data")
-
-if not df.empty:
-    df_export = df.rename(columns={
-        "date": "Date",
-        "category": "Category",
-        "amount": "Amount",
-        "note": "Item / Comment"
-    })
-
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_export.to_excel(writer, index=False)
-
-    st.download_button(
-        label="📥 Download Excel File",
-        data=buffer.getvalue(),
-        file_name="expenses.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-else:
-    st.info("No data available to export.")
