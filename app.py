@@ -7,19 +7,17 @@ st.set_page_config(page_title="Expense Tracker", page_icon="💸")
 db.create_table()
 
 st.title("💸 Simple Expense Tracker")
+
+# ====================================
+# BULK EXPENSE ENTRY
+# ====================================
 st.subheader("Add Expenses (Bulk Entry)")
 
-# ------------------------------------
-# Categories
-# ------------------------------------
 categories = [
     "Food", "Transport", "Appliance", "Wear", "Gadget",
     "Donation", "Investment", "Gift", "Repairs", "Other"
 ]
 
-# ------------------------------------
-# Initialize session table
-# ------------------------------------
 if "expense_table" not in st.session_state:
     st.session_state.expense_table = pd.DataFrame({
         "Item": [""],
@@ -29,63 +27,40 @@ if "expense_table" not in st.session_state:
         "Date": [None]
     })
 
-# ------------------------------------
-# Editable table
-# ------------------------------------
 edited_df = st.data_editor(
     st.session_state.expense_table,
     num_rows="dynamic",
     use_container_width=True,
     column_config={
-        "Item": st.column_config.TextColumn(
-            "Item", required=True
-        ),
+        "Item": st.column_config.TextColumn("Item", required=True),
         "Amount": st.column_config.NumberColumn(
             "Amount (₦)", min_value=0.0, step=100.0, required=True
         ),
         "Category": st.column_config.SelectboxColumn(
             "Category", options=categories, required=True
         ),
-        "Comment": st.column_config.TextColumn(
-            "Comment (optional)"
-        ),
-        "Date": st.column_config.DateColumn(
-            "Date (optional)", required=False
-        )
+        "Comment": st.column_config.TextColumn("Comment (optional)"),
+        "Date": st.column_config.DateColumn("Date (optional)", required=False),
     }
 )
 
-# ------------------------------------
-# Auto S/N (computed only)
-# ------------------------------------
-display_df = edited_df.copy()
-display_df.insert(0, "S/N", range(1, len(display_df) + 1))
-
 st.session_state.expense_table = edited_df
 
-# ------------------------------------
-# LIVE TOTAL (updates instantly)
-# ------------------------------------
+# LIVE TOTAL
 live_total = edited_df["Amount"].fillna(0).sum()
+st.metric("💰 Current Total (Not Yet Saved)", f"₦{live_total:,.2f}")
 
-st.markdown("### 💰 Live Total")
-st.metric("Current Total", f"₦{live_total:,.2f}")
-
-# ------------------------------------
-# Save to database
-# ------------------------------------
+# SAVE
 if st.button("💾 Save All Expenses"):
     saved = 0
-
     for _, row in edited_df.iterrows():
         if not row["Item"] or row["Amount"] <= 0:
             continue
 
-        final_date = (
+        expense_date = (
             str(row["Date"]) if pd.notna(row["Date"]) else str(date.today())
         )
 
-        # Build note intelligently
         note = row["Item"]
         if row["Category"] == "Other" and row["Comment"]:
             note = f"{row['Item']} — {row['Comment']}"
@@ -93,41 +68,65 @@ if st.button("💾 Save All Expenses"):
         db.add_expense(
             amount=row["Amount"],
             category=row["Category"],
-            date=final_date,
+            date=expense_date,
             note=note
         )
         saved += 1
 
-    st.success(f"✅ {saved} expenses saved successfully!")
+    st.success(f"✅ {saved} expenses saved!")
+    st.session_state.expense_table = st.session_state.expense_table.iloc[0:0]
 
-    # Reset table
-    st.session_state.expense_table = pd.DataFrame({
-        "Item": [""],
-        "Amount": [0.0],
-        "Category": ["Food"],
-        "Comment": [""],
-        "Date": [None]
+# ====================================
+# ANALYTICS SECTION
+# ====================================
+st.divider()
+st.header("📊 Analytics")
+
+df = db.fetch_expenses_df()
+
+if not df.empty:
+    df["date"] = pd.to_datetime(df["date"])
+    df["week"] = df["date"].dt.to_period("W").astype(str)
+    df["month"] = df["date"].dt.to_period("M").astype(str)
+
+    # CATEGORY PIE
+    st.subheader("Spending by Category")
+    cat_df = df.groupby("category")["amount"].sum()
+    st.pyplot(cat_df.plot(kind="pie", autopct="%1.1f%%", ylabel="").figure)
+
+    # WEEKLY LINE
+    st.subheader("Weekly Spending Trend")
+    week_df = df.groupby("week")["amount"].sum().reset_index()
+    st.line_chart(week_df, x="week", y="amount")
+
+    # MONTHLY BAR
+    st.subheader("Monthly Spending")
+    month_df = df.groupby("month")["amount"].sum().reset_index()
+    st.bar_chart(month_df, x="month", y="amount")
+
+else:
+    st.info("No saved data yet for analytics.")
+
+# ====================================
+# EXPORT SECTION
+# ====================================
+st.divider()
+st.header("📤 Export Data")
+
+if not df.empty:
+    excel_file = "expenses.xlsx"
+    df_export = df.rename(columns={
+        "date": "Date",
+        "category": "Category",
+        "amount": "Amount",
+        "note": "Item / Comment"
     })
 
-# ------------------------------------
-# DATABASE SUMMARY
-# ------------------------------------
-st.divider()
-st.subheader("Saved Expenses Summary")
-
-total_db = db.total_expense()
-st.metric("Total Saved Spending", f"₦{total_db:,.2f}")
-
-# ------------------------------------
-# Expense History
-# ------------------------------------
-st.subheader("Expense History")
-
-expenses = db.fetch_expenses()
-if expenses:
-    history_df = pd.DataFrame(
-        expenses, columns=["Date", "Category", "Amount", "Item / Comment"]
+    st.download_button(
+        label="📥 Download Excel File",
+        data=df_export.to_excel(index=False, engine="openpyxl"),
+        file_name=excel_file,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    st.dataframe(history_df, use_container_width=True)
 else:
-    st.info("No expenses saved yet.")
+    st.info("No data available to export.")
