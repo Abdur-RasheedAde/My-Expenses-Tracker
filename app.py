@@ -114,25 +114,26 @@ if not df.empty:
     df["month_no"] = df["date"].dt.month
     df["month_label"] = df["date"].dt.strftime("%b")
 
-    # ------------------
-    # CATEGORY PIE
-    # ------------------
+    # ==========================
+    # CATEGORY PIE (MODERATE SIZE ✅)
+    # ==========================
     st.subheader("Spending by Category")
     cat_df = df.groupby("category")["amount"].sum()
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5, 5))  # ✅ moderate size
     ax.pie(
         cat_df.values,
         labels=cat_df.index,
         autopct="%1.1f%%",
-        startangle=90
+        startangle=90,
+        textprops={"fontsize": 10}
     )
     ax.axis("equal")
     st.pyplot(fig)
 
-    # ------------------
+    # ==========================
     # WEEKLY TREND
-    # ------------------
+    # ==========================
     st.subheader("Weekly Spending Trend")
     week_df = (
         df.groupby(["week_no", "week_label"], as_index=False)["amount"]
@@ -141,9 +142,9 @@ if not df.empty:
     )
     st.line_chart(week_df, x="week_label", y="amount")
 
-    # ------------------
+    # ==========================
     # MONTHLY TREND
-    # ------------------
+    # ==========================
     st.subheader("Monthly Spending")
     month_df = (
         df.groupby(["month_no", "month_label"], as_index=False)["amount"]
