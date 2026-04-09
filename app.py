@@ -131,4 +131,3 @@ if expenses:
     st.dataframe(history_df, use_container_width=True)
 else:
     st.info("No expenses saved yet.")
-``
