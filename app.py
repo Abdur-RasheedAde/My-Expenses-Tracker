@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import database as db
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Expense Tracker", page_icon="💸")
 db.create_table()
