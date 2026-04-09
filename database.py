@@ -1,5 +1,5 @@
-import pandas as pd
 import sqlite3
+import pandas as pd
 
 def get_connection():
     return sqlite3.connect("expense.db", check_same_thread=False)
@@ -32,7 +32,9 @@ def add_expense(amount, category, date, note):
 def fetch_expenses():
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT date, category, amount, note FROM expenses ORDER BY date DESC")
+    cur.execute(
+        "SELECT date, category, amount, note FROM expenses ORDER BY date DESC"
+    )
     rows = cur.fetchall()
     conn.close()
     return rows
@@ -48,4 +50,8 @@ def total_expense():
 def fetch_expenses_df():
     conn = get_connection()
     df = pd.read_sql(
-       
+        "SELECT date, category, amount, note FROM expenses",
+        conn
+    )
+    conn.close()
+    return df
