@@ -5,14 +5,17 @@ import matplotlib.pyplot as plt
 import io
 import database as db
 
+# ==========================
+# APP CONFIG
+# ==========================
 st.set_page_config(page_title="Expense Tracker", page_icon="💸")
 db.create_table()
 
 st.title("💸 Simple Expense Tracker")
 
-# ====================================
+# ==========================
 # BULK EXPENSE ENTRY
-# ====================================
+# ==========================
 st.subheader("Add Expenses (Bulk Entry)")
 
 categories = [
@@ -20,6 +23,7 @@ categories = [
     "Donation", "Investment", "Gift", "Repairs", "Other"
 ]
 
+# Initialize editable table
 if "expense_table" not in st.session_state:
     st.session_state.expense_table = pd.DataFrame({
         "Item": [""],
@@ -48,11 +52,15 @@ edited_df = st.data_editor(
 
 st.session_state.expense_table = edited_df
 
-# LIVE TOTAL (updates instantly)
+# ==========================
+# LIVE TOTAL (NOT SAVED)
+# ==========================
 live_total = edited_df["Amount"].fillna(0).sum()
 st.metric("💰 Current Total (Not Yet Saved)", f"₦{live_total:,.2f}")
 
+# ==========================
 # SAVE TO DATABASE
+# ==========================
 if st.button("💾 Save All Expenses"):
     saved = 0
 
@@ -77,11 +85,19 @@ if st.button("💾 Save All Expenses"):
         saved += 1
 
     st.success(f"✅ {saved} expenses saved successfully!")
-    st.session_state.expense_table = st.session_state.expense_table.iloc[0:0]
 
-# ====================================
-# ANALYTICS SECTION
-# ====================================
+    # Reset table
+    st.session_state.expense_table = pd.DataFrame({
+        "Item": [""],
+        "Amount": [0.0],
+        "Category": ["Food"],
+        "Comment": [""],
+        "Date": [None]
+    })
+
+# ==========================
+# ANALYTICS
+# ==========================
 st.divider()
 st.header("📊 Analytics")
 
@@ -89,10 +105,18 @@ df = db.fetch_expenses_df()
 
 if not df.empty:
     df["date"] = pd.to_datetime(df["date"])
-    df["week"] = df["date"].dt.to_period("W").astype(str)
-    df["month"] = df["date"].dt.to_period("M").astype(str)
 
-    # CATEGORY PIE (Matplotlib-safe)
+    # WEEK FORMATTING → Wk-01, Wk-02...
+    df["week_no"] = df["date"].dt.isocalendar().week
+    df["week_label"] = df["week_no"].apply(lambda x: f"Wk-{x:02d}")
+
+    # MONTH FORMATTING → Jan, Feb...
+    df["month_no"] = df["date"].dt.month
+    df["month_label"] = df["date"].dt.strftime("%b")
+
+    # ------------------
+    # CATEGORY PIE
+    # ------------------
     st.subheader("Spending by Category")
     cat_df = df.groupby("category")["amount"].sum()
 
@@ -106,22 +130,34 @@ if not df.empty:
     ax.axis("equal")
     st.pyplot(fig)
 
-    # WEEKLY LINE
+    # ------------------
+    # WEEKLY TREND
+    # ------------------
     st.subheader("Weekly Spending Trend")
-    week_df = df.groupby("week")["amount"].sum().reset_index()
-    st.line_chart(week_df, x="week", y="amount")
+    week_df = (
+        df.groupby(["week_no", "week_label"], as_index=False)["amount"]
+        .sum()
+        .sort_values("week_no")
+    )
+    st.line_chart(week_df, x="week_label", y="amount")
 
-    # MONTHLY BAR
+    # ------------------
+    # MONTHLY TREND
+    # ------------------
     st.subheader("Monthly Spending")
-    month_df = df.groupby("month")["amount"].sum().reset_index()
-    st.bar_chart(month_df, x="month", y="amount")
+    month_df = (
+        df.groupby(["month_no", "month_label"], as_index=False)["amount"]
+        .sum()
+        .sort_values("month_no")
+    )
+    st.bar_chart(month_df, x="month_label", y="amount")
 
 else:
     st.info("No saved data yet for analytics.")
 
-# ====================================
-# EXPORT SECTION
-# ====================================
+# ==========================
+# EXPORT TO EXCEL
+# ==========================
 st.divider()
 st.header("📤 Export Data")
 
@@ -141,7 +177,3 @@ if not df.empty:
         label="📥 Download Excel File",
         data=buffer.getvalue(),
         file_name="expenses.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-else:
-    st.info("No data available to export.")
