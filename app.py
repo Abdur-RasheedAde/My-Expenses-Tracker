@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import database as db
 import matplotlib.pyplot as plt
+import io
+import database as db
 
 st.set_page_config(page_title="Expense Tracker", page_icon="💸")
 db.create_table()
@@ -47,13 +48,14 @@ edited_df = st.data_editor(
 
 st.session_state.expense_table = edited_df
 
-# LIVE TOTAL
+# LIVE TOTAL (updates instantly)
 live_total = edited_df["Amount"].fillna(0).sum()
 st.metric("💰 Current Total (Not Yet Saved)", f"₦{live_total:,.2f}")
 
-# SAVE
+# SAVE TO DATABASE
 if st.button("💾 Save All Expenses"):
     saved = 0
+
     for _, row in edited_df.iterrows():
         if not row["Item"] or row["Amount"] <= 0:
             continue
@@ -74,7 +76,7 @@ if st.button("💾 Save All Expenses"):
         )
         saved += 1
 
-    st.success(f"✅ {saved} expenses saved!")
+    st.success(f"✅ {saved} expenses saved successfully!")
     st.session_state.expense_table = st.session_state.expense_table.iloc[0:0]
 
 # ====================================
@@ -90,10 +92,19 @@ if not df.empty:
     df["week"] = df["date"].dt.to_period("W").astype(str)
     df["month"] = df["date"].dt.to_period("M").astype(str)
 
-    # CATEGORY PIE
+    # CATEGORY PIE (Matplotlib-safe)
     st.subheader("Spending by Category")
     cat_df = df.groupby("category")["amount"].sum()
-    st.pyplot(cat_df.plot(kind="pie", autopct="%1.1f%%", ylabel="").figure)
+
+    fig, ax = plt.subplots()
+    ax.pie(
+        cat_df.values,
+        labels=cat_df.index,
+        autopct="%1.1f%%",
+        startangle=90
+    )
+    ax.axis("equal")
+    st.pyplot(fig)
 
     # WEEKLY LINE
     st.subheader("Weekly Spending Trend")
@@ -115,7 +126,6 @@ st.divider()
 st.header("📤 Export Data")
 
 if not df.empty:
-    excel_file = "expenses.xlsx"
     df_export = df.rename(columns={
         "date": "Date",
         "category": "Category",
@@ -123,10 +133,14 @@ if not df.empty:
         "note": "Item / Comment"
     })
 
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_export.to_excel(writer, index=False)
+
     st.download_button(
         label="📥 Download Excel File",
-        data=df_export.to_excel(index=False, engine="openpyxl"),
-        file_name=excel_file,
+        data=buffer.getvalue(),
+        file_name="expenses.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 else:
