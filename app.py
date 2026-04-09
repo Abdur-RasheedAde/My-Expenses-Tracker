@@ -177,3 +177,7 @@ if not df.empty:
         label="📥 Download Excel File",
         data=buffer.getvalue(),
         file_name="expenses.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+else:
+    st.info("No data available to export.")
